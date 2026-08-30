@@ -3,11 +3,11 @@ cmake_minimum_required(VERSION 3.20)
 project(EmergencyRadio LANGUAGES CXX)
 
 if(NOT WIN32)
-    message(FATAL_ERROR "EmergencyRadio requires Windows")
+    message(FATAL_ERROR "Windows is required")
 endif()
 
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-    message(FATAL_ERROR "EmergencyRadio requires 32-bit x86 / Win32")
+    message(FATAL_ERROR "GTA SA requires a 32-bit build")
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
@@ -19,7 +19,7 @@ include(FetchContent)
 FetchContent_Declare(
     plugin_sdk
     GIT_REPOSITORY https://github.com/DK22Pac/plugin-sdk.git
-    GIT_TAG master
+    GIT_TAG a1df3a6
     GIT_SHALLOW TRUE
 )
 
@@ -32,7 +32,6 @@ add_library(EmergencyRadio SHARED
 target_include_directories(EmergencyRadio PRIVATE
     ${plugin_sdk_SOURCE_DIR}/plugin_sa
     ${plugin_sdk_SOURCE_DIR}/plugin_sa/game_sa
-    ${plugin_sdk_SOURCE_DIR}/plugin_sa/game_sa/enums
     ${plugin_sdk_SOURCE_DIR}/shared
 )
 
