@@ -7,52 +7,25 @@ if(NOT WIN32)
 endif()
 
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-    message(FATAL_ERROR "GTA San Andreas requires Win32/x86")
+    message(FATAL_ERROR "This project must be built as Win32/x86")
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-include(FetchContent)
-
-# RakHook — поддерживает SA-MP 0.3.7-R1
-FetchContent_Declare(
-    rakhook
-    GIT_REPOSITORY https://github.com/imring/RakHook.git
-    GIT_TAG master
-    GIT_SHALLOW TRUE
-)
-
-FetchContent_MakeAvailable(rakhook)
-
-# plugin-sdk только как headers/source tree.
-# Мы НЕ собираем весь plugin-sdk.
-FetchContent_Declare(
-    plugin_sdk
-    GIT_REPOSITORY https://github.com/DK22Pac/plugin-sdk.git
-    GIT_TAG master
-    GIT_SHALLOW TRUE
-)
-
-FetchContent_MakeAvailable(plugin_sdk)
-
 add_library(EmergencyRadio SHARED
     dllmain.cpp
 )
 
-target_include_directories(EmergencyRadio PRIVATE
-
-    ${rakhook_SOURCE_DIR}/include
-
-    ${plugin_sdk_SOURCE_DIR}/plugin_sa
-    ${plugin_sdk_SOURCE_DIR}/plugin_sa/game_sa
-    ${plugin_sdk_SOURCE_DIR}/shared
-
+target_compile_definitions(EmergencyRadio PRIVATE
+    WIN32_LEAN_AND_MEAN
+    _CRT_SECURE_NO_WARNINGS
 )
 
-target_link_libraries(EmergencyRadio PRIVATE
-    rakhook::rakhook
+target_compile_options(EmergencyRadio PRIVATE
+    /EHsc
+    /O2
 )
 
 set_target_properties(EmergencyRadio PROPERTIES
@@ -61,8 +34,9 @@ set_target_properties(EmergencyRadio PROPERTIES
 )
 
 if(MSVC)
-    target_compile_options(EmergencyRadio PRIVATE
-        /EHsc
-        /MP
+    set_property(
+        TARGET EmergencyRadio
+        PROPERTY MSVC_RUNTIME_LIBRARY
+        "MultiThreadedDLL"
     )
 endif()
