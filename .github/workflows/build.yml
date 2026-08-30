@@ -1,0 +1,30 @@
+name: Test plugin-sdk
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  test:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake
+          -S .
+          -B build
+          -A Win32
+
+      - name: Show CMake information
+        shell: pwsh
+        run: |
+          Write-Host "CMake configuration completed."
+          Get-ChildItem -Path build -Recurse -File |
+            Select-Object FullName
