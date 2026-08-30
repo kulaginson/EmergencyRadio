@@ -1,154 +1,257 @@
 #include <windows.h>
 #include <cstdint>
 
+// ============================================================
+// EmergencyRadio
+//
+// Перенос логики рабочего MoonLoader-скрипта в ASI.
+//
+// Используем те же адреса, что и в твоём Lua:
+//
+// AUDIO_SETTINGS_BASE = 0x860AF0
+// RECORD_SIZE         = 0x24
+// RADIO_ID_OFFSET     = 0x1A
+// RADIO_TYPE_OFFSET   = 0x1B
+//
+// GTA SA / адреса должны соответствовать той же версии игры,
+// на которой работает твой emergency_radio.lua.
+// ============================================================
+
 namespace
 {
-    // GTA SA 1.0 US addresses.
-    constexpr std::uintptr_t WORLD_PLAYERS = 0xB7CD98;
+    constexpr std::uintptr_t AUDIO_SETTINGS_BASE = 0x860AF0;
 
-    // CPed::m_pVehicle
-    constexpr std::uintptr_t PED_VEHICLE_OFFSET = 0x58C;
+    constexpr std::uintptr_t RECORD_SIZE       = 0x24;
+    constexpr std::uintptr_t RADIO_ID_OFFSET   = 0x1A;
+    constexpr std::uintptr_t RADIO_TYPE_OFFSET = 0x1B;
 
-    // CVehicle::m_vehicleAudio
-    constexpr std::uintptr_t VEHICLE_AUDIO_OFFSET = 0x138;
+    // F7
+    constexpr int TOGGLE_KEY = VK_F7;
 
-    /*
-        The radio type is stored inside the vehicle-audio settings.
+    // true  = обычное гражданское радио
+    // false = штатная рация спецслужб
+    bool civilianRadio = true;
 
-        GTA SA values:
-          -1 = no radio
-           0 = civilian radio
-           1 = special
-           2 = none/unused
-           3 = emergency radio
-    */
-
-    // For the classic GTA SA vehicle audio settings layout.
-    constexpr std::uintptr_t RADIO_TYPE_OFFSET = 0x0F;
-
-    constexpr std::uint8_t RADIO_CIVILIAN = 0;
-
-    // GTA SA model IDs.
-    constexpr int MODEL_POLICE      = 596;
-    constexpr int MODEL_POLICE_LS   = 596;
-    constexpr int MODEL_POLICE_SF   = 597;
-    constexpr int MODEL_POLICE_LV   = 598;
-    constexpr int MODEL_RANGER      = 599;
-    constexpr int MODEL_FBI_RANCHER = 490;
-    constexpr int MODEL_FBIRANCH    = 528;
-    constexpr int MODEL_ENFORCER    = 427;
-    constexpr int MODEL_AMBULANCE   = 416;
-    constexpr int MODEL_FIRETRUCK   = 407;
-    constexpr int MODEL_SWAT        = 601;
-    constexpr int MODEL_POLICE_RANGER = 599;
-    constexpr int MODEL_HP_VAN      = 497;
-    constexpr int MODEL_POLICE_MOTORCYCLE = 523;
-
-    // CVehicle::m_nModelIndex is inherited from CEntity.
-    constexpr std::uintptr_t VEHICLE_MODEL_OFFSET = 0x22;
-
-    bool IsEmergencyVehicle(std::uintptr_t vehicle)
+    // Служебные автомобили из твоего Lua.
+    constexpr int emergencyModels[] =
     {
-        if (!vehicle)
-            return false;
+        407, // Fire Truck
+        416, // Ambulance
+        427, // Enforcer
+        490, // FBI Rancher
+        523, // HPV1000
+        528, // FBI Truck
+        544, // Fire LA
+        596, // Police LS
+        597, // Police SF
+        598, // Police LV
+        599, // Police Ranger
+        601  // SWAT
+    };
 
-        const auto model =
-            *reinterpret_cast<const std::int16_t*>(
-                vehicle + VEHICLE_MODEL_OFFSET
-            );
+    constexpr std::size_t emergencyModelCount =
+        sizeof(emergencyModels) / sizeof(emergencyModels[0]);
 
-        switch (model)
+
+    // --------------------------------------------------------
+    // Проверка модели
+    // --------------------------------------------------------
+
+    bool isEmergencyModel(int modelId)
+    {
+        for (std::size_t i = 0;
+             i < emergencyModelCount;
+             ++i)
         {
-            case MODEL_POLICE:
-            case MODEL_POLICE_SF:
-            case MODEL_POLICE_LV:
-            case MODEL_RANGER:
-            case MODEL_FBI_RANCHER:
-            case MODEL_FBIRANCH:
-            case MODEL_ENFORCER:
-            case MODEL_AMBULANCE:
-            case MODEL_FIRETRUCK:
-            case MODEL_SWAT:
-            case MODEL_HP_VAN:
-            case MODEL_POLICE_MOTORCYCLE:
+            if (emergencyModels[i] == modelId)
                 return true;
+        }
 
-            default:
-                return false;
+        return false;
+    }
+
+
+    // --------------------------------------------------------
+    // Изменение записи аудио конкретной модели
+    //
+    // Полностью повторяет твой Lua:
+    //
+    // record =
+    //     AUDIO_SETTINGS_BASE +
+    //     (modelId - 400) * RECORD_SIZE
+    // --------------------------------------------------------
+
+    void setRadio(int modelId)
+    {
+        if (!isEmergencyModel(modelId))
+            return;
+
+        const std::uintptr_t record =
+            AUDIO_SETTINGS_BASE +
+            static_cast<std::uintptr_t>(
+                modelId - 400
+            ) * RECORD_SIZE;
+
+
+        __try
+        {
+            if (civilianRadio)
+            {
+                // Обычное гражданское радио.
+                *reinterpret_cast<std::uint8_t*>(
+                    record + RADIO_ID_OFFSET
+                ) = 1;
+
+                *reinterpret_cast<std::uint8_t*>(
+                    record + RADIO_TYPE_OFFSET
+                ) = 0;
+            }
+            else
+            {
+                // Штатная рация спецслужб.
+                *reinterpret_cast<std::uint8_t*>(
+                    record + RADIO_ID_OFFSET
+                ) = 13;
+
+                *reinterpret_cast<std::uint8_t*>(
+                    record + RADIO_TYPE_OFFSET
+                ) = 3;
+            }
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            // Если адреса не соответствуют EXE,
+            // не даём игре упасть.
         }
     }
 
-    void EnableCivilianRadio()
+
+    // --------------------------------------------------------
+    // Применить настройки ко всем служебным моделям
+    // --------------------------------------------------------
+
+    void applyAll()
     {
-        /*
-            CWorld::Players[0]
-                + 0x00 = CPlayerPed*
-
-            CPlayerPed inherits CPed.
-
-            CPed
-                + 0x58C = m_pVehicle
-
-            CVehicle
-                + 0x138 = m_vehicleAudio
-        */
-
-        auto playerPed =
-            *reinterpret_cast<std::uintptr_t*>(
-                WORLD_PLAYERS
-            );
-
-        if (!playerPed)
-            return;
-
-        auto vehicle =
-            *reinterpret_cast<std::uintptr_t*>(
-                playerPed + PED_VEHICLE_OFFSET
-            );
-
-        if (!vehicle)
-            return;
-
-        if (!IsEmergencyVehicle(vehicle))
-            return;
-
-        auto vehicleAudio =
-            vehicle + VEHICLE_AUDIO_OFFSET;
-
-        /*
-            Change the vehicle's radio type to civilian.
-
-            This is intentionally done continuously while the player
-            remains in the emergency vehicle, because GTA can restore
-            the emergency radio setting when entering/changing vehicles.
-        */
-        *reinterpret_cast<std::uint8_t*>(
-            vehicleAudio + RADIO_TYPE_OFFSET
-        ) = RADIO_CIVILIAN;
+        for (std::size_t i = 0;
+             i < emergencyModelCount;
+             ++i)
+        {
+            setRadio(emergencyModels[i]);
+        }
     }
+
+
+    // --------------------------------------------------------
+    // Уведомление на экране
+    //
+    // Используем GTA SA native-функцию через её адрес.
+    //
+    // ВАЖНО:
+    // Если этот адрес не соответствует твоему EXE,
+    // уведомление просто не вызывается.
+    // Само изменение radio settings от этого не зависит.
+    // --------------------------------------------------------
+
+    using PrintStringNow_t =
+        void (__cdecl*)(const char*, unsigned int);
+
+    // Для классического GTA SA 1.0 US.
+    constexpr std::uintptr_t PRINT_STRING_NOW = 0x69F1E0;
+
+
+    void showMessage(const char* text)
+    {
+        __try
+        {
+            auto PrintStringNow =
+                reinterpret_cast<PrintStringNow_t>(
+                    PRINT_STRING_NOW
+                );
+
+            PrintStringNow(text, 1500);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            // Ничего не делаем.
+        }
+    }
+
+
+    // --------------------------------------------------------
+    // Главный поток ASI
+    // --------------------------------------------------------
 
     DWORD WINAPI MainThread(LPVOID)
     {
-        // Give GTA time to finish initialization.
+        // Даём GTA SA закончить загрузку.
         Sleep(3000);
+
+        // При запуске включаем обычное радио.
+        applyAll();
+
+        bool previousF7State = false;
 
         for (;;)
         {
-            __try
+            // ------------------------------------------------
+            // F7
+            // ------------------------------------------------
+
+            const bool currentF7State =
+                (GetAsyncKeyState(TOGGLE_KEY) & 0x8000) != 0;
+
+            // Аналог isKeyJustPressed().
+            if (currentF7State && !previousF7State)
             {
-                EnableCivilianRadio();
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER)
-            {
-                // Do not crash GTA if the executable layout differs.
+                civilianRadio = !civilianRadio;
+
+                applyAll();
+
+                if (civilianRadio)
+                {
+                    showMessage(
+                        "~g~Emergency Radio: ~w~Civilian Radio"
+                    );
+                }
+                else
+                {
+                    showMessage(
+                        "~y~Emergency Radio: ~w~Emergency Radio"
+                    );
+                }
             }
 
-            Sleep(250);
+            previousF7State = currentF7State;
+
+
+            // ------------------------------------------------
+            // Периодически повторяем настройки.
+            //
+            // Это полезно потому, что игра может восстановить
+            // исходные значения после загрузки/смены транспорта.
+            // ------------------------------------------------
+
+            static DWORD lastApply = 0;
+
+            const DWORD now = GetTickCount();
+
+            if (now - lastApply >= 1000)
+            {
+                applyAll();
+                lastApply = now;
+            }
+
+            Sleep(20);
         }
 
         return 0;
     }
 }
+
+
+// ============================================================
+// ASI / DLL entry point
+// ============================================================
 
 BOOL APIENTRY DllMain(
     HMODULE hModule,
