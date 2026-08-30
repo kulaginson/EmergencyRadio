@@ -6,8 +6,9 @@ if(NOT WIN32)
     message(FATAL_ERROR "Windows is required")
 endif()
 
+# GTA SA is 32-bit.
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-    message(FATAL_ERROR "This project must be built as Win32/x86")
+    message(FATAL_ERROR "EmergencyRadio must be built as Win32/x86")
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
@@ -31,6 +32,7 @@ target_compile_options(EmergencyRadio PRIVATE
 set_target_properties(EmergencyRadio PROPERTIES
     OUTPUT_NAME "EmergencyRadio"
     SUFFIX ".asi"
+    PREFIX ""
 )
 
 if(MSVC)
