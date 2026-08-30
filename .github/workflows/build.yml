@@ -1,4 +1,4 @@
-name: Test plugin-sdk
+name: Build EmergencyRadio
 
 on:
   workflow_dispatch:
@@ -8,23 +8,35 @@ on:
       - master
 
 jobs:
-  test:
+  build:
     runs-on: windows-2022
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure
+      - name: Configure CMake
         run: >
           cmake
           -S .
           -B build
           -A Win32
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
 
-      - name: Show CMake information
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Find ASI
         shell: pwsh
         run: |
-          Write-Host "CMake configuration completed."
-          Get-ChildItem -Path build -Recurse -File |
+          Write-Host "Searching for EmergencyRadio.asi..."
+          Get-ChildItem -Path build -Recurse -Filter EmergencyRadio.asi |
             Select-Object FullName
+
+      - name: Upload ASI
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmergencyRadio
+          path: build/**/EmergencyRadio.asi
+          if-no-files-found: error
