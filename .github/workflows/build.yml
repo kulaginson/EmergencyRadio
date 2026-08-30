@@ -12,6 +12,7 @@ jobs:
     runs-on: windows-2022
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -27,13 +28,13 @@ jobs:
         run: |
           cmake --build build --config Release --parallel
 
-      - name: Show files
+      - name: Find ASI
         shell: pwsh
         run: |
-          Get-ChildItem -Path build -Recurse -Filter "*.asi" |
+          Get-ChildItem -Path build -Recurse -Filter "EmergencyRadio.asi" |
             Select-Object FullName, Length
 
-      - name: Upload ASI
+      - name: Upload EmergencyRadio.asi
         uses: actions/upload-artifact@v4
         with:
           name: EmergencyRadio
